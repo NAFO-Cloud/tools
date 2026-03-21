@@ -1,8 +1,8 @@
 diff --git a/dialogue-archivist/app.js b/dialogue-archivist/app.js
-index 35fc2bb95619d7ad0a705380edc5491db7b68316..d66c9d93ef003adf287f62426ab0c9d924f2ddf3 100644
+index 35fc2bb95619d7ad0a705380edc5491db7b68316..60db7cc8a495c35f2390426761b34374cc21d0f6 100644
 --- a/dialogue-archivist/app.js
 +++ b/dialogue-archivist/app.js
-@@ -1 +1,126 @@
+@@ -1 +1,181 @@
  const speakerGrid = document.getElementById("speakerGrid");
 +const inputText = document.getElementById("inputText");
 +const output = document.getElementById("output");
@@ -45,6 +45,59 @@ index 35fc2bb95619d7ad0a705380edc5491db7b68316..d66c9d93ef003adf287f62426ab0c9d9
 +    .trim();
 +}
 +
++function splitByBlankLines(text) {
++  return text
++    .split(/\n\s*\n/g)
++    .map((s) => s.trim())
++    .filter(Boolean);
++}
++
++function looksShortLine(line) {
++  return line.length <= 60;
++}
++
++function shouldStartNewTurn(currentBlockLines, nextLine) {
++  const currentText = currentBlockLines.join("\n");
++  const currentIsSingleShort = currentBlockLines.length === 1 && looksShortLine(currentText);
++  const currentIsLong = currentBlockLines.length >= 2 || currentText.length >= 90;
++  const nextIsShort = looksShortLine(nextLine);
++  const nextClearlyLonger = nextLine.length >= currentText.length + 15;
++
++  // Short prompt followed by longer line often means next turn starts.
++  if (currentIsSingleShort && (!nextIsShort || nextClearlyLonger)) return true;
++
++  // Multi-line / longer block followed by short line often means a new turn starts.
++  if (currentIsLong && nextIsShort) return true;
++
++  return false;
++}
++
++function splitShortAlternatingChain(text) {
++  const lines = text
++    .split("\n")
++    .map((s) => s.trim())
++    .filter(Boolean);
++
++  if (lines.length <= 1) return lines;
++
++  const blocks = [];
++  let current = [lines[0]];
++
++  for (let i = 1; i < lines.length; i++) {
++    const next = lines[i];
++
++    if (shouldStartNewTurn(current, next)) {
++      blocks.push(current.join("\n"));
++      current = [next];
++    } else {
++      current.push(next);
++    }
++  }
++
++  blocks.push(current.join("\n"));
++  return blocks;
++}
++
 +function splitTranscript(text, mode) {
 +  const cleaned = normalizeTranscript(text);
 +
@@ -57,11 +110,13 @@ index 35fc2bb95619d7ad0a705380edc5491db7b68316..d66c9d93ef003adf287f62426ab0c9d9
 +      .filter(Boolean);
 +  }
 +
-+  // Preserve internal newlines within each paragraph-like block.
-+  return cleaned
-+    .split(/\n\s*\n/g)
-+    .map((s) => s.trim())
-+    .filter(Boolean);
++  // Primary rule: split by blank lines.
++  const blankLineBlocks = splitByBlankLines(cleaned);
++  if (blankLineBlocks.length > 1) return blankLineBlocks;
++
++  // Conservative fallback for short alternating chains without blank lines.
++  // This uses structure and line length only.
++  return splitShortAlternatingChain(cleaned);
 +}
 +
 +function stripLeadingSaid(text) {
@@ -86,7 +141,7 @@ index 35fc2bb95619d7ad0a705380edc5491db7b68316..d66c9d93ef003adf287f62426ab0c9d9
 +    }
 +  }
 +
-+  // Generic fallback for copied transcripts with "Name: message" prefixes.
++  // Conservative fallback for copied transcripts with "Name: message" prefixes.
 +  cleaned = cleaned.replace(/^[A-Z][\w .'-]{0,40}\s*(?:said)?\s*[:\-–—]\s*/i, "");
 +
 +  return stripLeadingSaid(cleaned).trim();
