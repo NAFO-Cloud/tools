@@ -184,4 +184,4 @@ For questions about the Dialogue Archivist project:
 
 **Version**: 0.1  
 **Last Updated**: 2026-03-22 13:48:00  
-**Status**: Active Development
+**Status**: Active Development - This UI is a minimal test harness for Dialogue Archivist v1 pipeline validation.
